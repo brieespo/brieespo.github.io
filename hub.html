@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hub</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --hairline: #e1e0d9;
+  --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6;
+  --accent-strong: #1c5cab;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --shadow: 0 1px 3px rgba(11,11,11,0.07);
+
+  /* app accent colors — match each sibling app's own --accent */
+  --law: #2a78d6;      --law-bg: #cde2fb;
+  --dinner: #b85c2c;   --dinner-bg: #f5e8df;
+  --sewing: #3b5e8c;   --sewing-bg: #e7eef6;
+  --restock: #2e7d5b;  --restock-bg: #e4f2ea;
+  --perfume: #463a32;  --perfume-bg: #ece7e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+    --accent-strong: #6da7ec;
+    --good-text: #0ca30c;
+    --shadow: none;
+
+    --law: #3987e5;      --law-bg: #16233a;
+    --dinner: #e08a52;   --dinner-bg: #3a2a1e;
+    --sewing: #6f9ac9;   --sewing-bg: #1e2a38;
+    --restock: #4bbf8c;  --restock-bg: #16302a;
+    --perfume: #9c8579;  --perfume-bg: #2e2822;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; flex: none; }
+.icon-lg { width: 1.6em; height: 1.6em; vertical-align: -0.35em; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; margin-top: 5px; background: var(--muted); vertical-align: 1px; flex: none; }
+.status-dot.good { background: var(--good); }
+.status-dot.warning { background: var(--warning); }
+.status-dot.critical { background: var(--critical); }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  line-height: 1.45;
+  padding-bottom: 60px;
+}
+header.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline);
+  padding: 14px 20px;
+  position: sticky; top: 0; z-index: 20;
+}
+.header-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 1.15rem; font-weight: 650; display: inline-flex; align-items: center; gap: 7px; }
+h1 .icon-lg { color: var(--accent); }
+.header-sub { color: var(--muted); font-size: 0.8rem; }
+.user-info { margin-left: auto; font-size: 0.8rem; color: var(--ink-2); white-space: nowrap; }
+.user-info a { color: var(--accent); cursor: pointer; }
+
+main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow);
+}
+h2 { font-size: 0.92rem; font-weight: 650; margin: 0; }
+
+/* ---- headline banner ---- */
+.pace-banner { margin-bottom: 18px; padding: 12px 16px; font-size: 0.88rem; display: flex; align-items: center; gap: 8px; }
+.pace-banner .icon { color: var(--accent); }
+
+/* ---- app switcher ---- */
+.app-switcher { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.switcher-item { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); width: 74px; }
+.switcher-icon {
+  width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: var(--app-bg); color: var(--app-color); box-shadow: var(--shadow); transition: transform 0.1s;
+}
+.switcher-icon svg { width: 22px; height: 22px; }
+.switcher-item:hover .switcher-icon { transform: translateY(-1px); }
+.switcher-label { font-size: 0.72rem; color: var(--ink-2); text-align: center; }
+
+/* ---- widget grid ---- */
+.widget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 860px) { .widget-grid { grid-template-columns: 1fr; } }
+a.widget { text-decoration: none; color: inherit; display: block; transition: border-color 0.12s; }
+a.widget:hover { border-color: var(--app-color); }
+.widget-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.widget-head .widget-icon { color: var(--app-color); display: flex; flex: none; }
+.widget-head .widget-icon svg { width: 20px; height: 20px; }
+.widget-head h2 { flex: 1; }
+.widget-head .widget-open { color: var(--muted); display: flex; flex: none; }
+.widget-head .widget-open svg { width: 16px; height: 16px; }
+.widget-body { font-size: 0.85rem; }
+.widget-sub { font-size: 0.74rem; color: var(--muted); }
+.widget-empty { font-size: 0.82rem; color: var(--muted); font-style: italic; }
+.chip { font-size: 0.7rem; background: var(--hairline); border-radius: 8px; padding: 2px 8px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+
+/* ---- deadlines list ---- */
+.warn-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.warn-list li { display: flex; gap: 2px; align-items: flex-start; }
+
+/* ---- Law Review stage ---- */
+.stage-title { font-weight: 650; font-size: 0.92rem; }
+.stage-q { font-size: 0.82rem; color: var(--ink-2); font-style: italic; margin-top: 4px; }
+
+/* ---- dinner day strip ---- */
+.day-strip { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.day-strip li { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px; border-radius: 6px; }
+.day-strip li.today { background: var(--app-bg); font-weight: 600; }
+.day-label { width: 32px; color: var(--muted); font-size: 0.74rem; flex: none; }
+.day-meal { flex: 1; }
+
+/* ---- auth (same pattern as sibling apps) ---- */
+#auth-overlay { position: fixed; inset: 0; background: var(--page); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+#auth-overlay.hidden { display: none; }
+.auth-box { max-width: 340px; width: 100%; text-align: center; }
+.auth-box .auth-logo { width: 2rem; height: 2rem; color: var(--accent); margin: 0 auto 6px; }
+.auth-box h2 { margin: 6px 0 2px; }
+.auth-box .auth-sub { font-size: 0.8rem; color: var(--ink-2); margin-bottom: 14px; }
+.auth-field { text-align: left; margin-bottom: 10px; }
+.auth-field label { font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 2px; }
+.auth-field input { width: 100%; font: inherit; font-size: 0.85rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--ink); }
+.auth-box button { width: 100%; font: inherit; font-size: 0.85rem; padding: 8px; border-radius: 8px; cursor: pointer; margin-top: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); }
+.auth-remember { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--ink-2); margin-top: 2px; }
+.auth-err { font-size: 0.78rem; color: var(--critical); min-height: 1.2em; margin-top: 8px; }
+.auth-err.ok { color: var(--good-text); }
+.auth-toggle { font-size: 0.78rem; color: var(--ink-2); margin-top: 10px; }
+.auth-toggle a { color: var(--accent); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.ghost {}
+</style>
+</head>
+<body>
+
+<div id="auth-overlay">
+  <div class="auth-box card">
+    <div class="auth-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%"><rect x="3" y="10" width="18" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+    <h2>Hub</h2>
+    <p class="auth-sub" id="auth-subtitle">Sign in — same account as your other apps</p>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')authSubmit()">
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="Password" onkeydown="if(event.key==='Enter')authSubmit()">
+    </div>
+    <label class="auth-remember"><input type="checkbox" id="auth-remember"> Remember me</label>
+    <button class="primary" id="auth-btn" onclick="authSubmit()">Sign In</button>
+    <button class="ghost" onclick="authGuest()">Continue without an account (this browser only)</button>
+    <div class="auth-err" id="auth-err"></div>
+    <div class="auth-toggle">
+      <span id="auth-toggle-text">Don't have an account?</span>
+      <a onclick="toggleAuthMode()"><span id="auth-toggle-link"> Sign up</span></a>
+    </div>
+  </div>
+</div>
+
+<header class="app-header">
+  <div class="header-row">
+    <h1><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Hub</h1>
+    <span class="header-sub">Everything at a glance</span>
+    <div class="user-info" id="user-info" style="display:none">
+      <span id="user-email"></span> · <a onclick="doSignOut()">sign out</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="card pace-banner" id="headline-banner"></div>
+  <nav class="app-switcher" id="app-switcher"></nav>
+  <div class="widget-grid" id="widget-grid"></div>
+</main>
+
+<script>
+/* =====================================================================
+   STORAGE — shared Supabase project (same URL/key as every sibling app,
+   so one login covers all of them). The hub owns no data of its own —
+   it only reads each app's own table.
+   ===================================================================== */
+const SUPABASE_URL = 'https://zymvsdkwmdhrwjycxisr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_svwMiYGDfWnINCeo28XiLw_UIFHRUg5';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null, guestMode = false;
+
+/* ---- shared helpers ---- */
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+const svgIcon = paths => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+const statusDot = level => `<span class="status-dot ${level}"></span>`;
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const daysUntil = iso => Math.ceil((new Date(iso + "T23:59:59") - new Date()) / 86400000);
+const fmtDate = iso => new Date(iso + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+const ICONS = {
+  law: svgIcon('<path d="M12 3v18M5 8l-3 6a4 4 0 0 0 8 0zM19 8l-3 6a4 4 0 0 0 8 0zM5 8h14M9 3h6"/>'),
+  dinner: svgIcon('<path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'),
+  sewing: svgIcon('<path d="M17.5 6.5 3 21"/><circle cx="19" cy="5" r="2.1"/>'),
+  restock: svgIcon('<path d="M4 10h16l-1.3 8.8a2 2 0 0 1-2 1.7H7.3a2 2 0 0 1-2-1.7Z"/><path d="M8 10a4 4 0 0 1 8 0"/><path d="M9 14v3"/><path d="M15 14v3"/>'),
+  perfume: svgIcon('<rect x="6.8" y="12.2" width="8.6" height="9.6" rx="2.2"/><path d="M9.6 12.2v-1.7a1 1 0 0 1 1-1h1.6a1 1 0 0 1 1 1v1.7"/><path d="M9 10.5h4.2"/><path d="M12.7 9.5c.5-1.4 1.5-2.6 2.8-3.2"/><circle cx="16.4" cy="5.7" r="2.7"/><path d="M9.2 16.6h4.8"/>'),
+  chevronRight: svgIcon('<polyline points="9 18 15 12 9 6"/>'),
+  home: svgIcon('<rect x="3" y="10" width="18" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>')
+};
+
+/* =====================================================================
+   LAW REVIEW — Volume 65 note-writing roadmap. This is a fixed schedule
+   (not per-user jsonb), mirroring law-school-tracker's NOTE_STAGES exactly.
+   ===================================================================== */
+const NOTE_STAGES = [
+  { month: "2026-07", label: "Topic exploration",        q: "What conversation do I want to join?" },
+  { month: "2026-08", label: "Scholarly conversation",   q: "Who's already in this conversation, and what's my angle?", cps: [{ label: "Topic selection essay", date: "2026-08-10" }] },
+  { month: "2026-09", label: "Prospectus",               q: "Can I state my thesis and research plan in two pages?",    cps: [{ label: "Research prospectus", date: "2026-09-06" }] },
+  { month: "2026-10", label: "Literature review",        q: "What gap does the scholarship leave open?",                cps: [{ label: "Lit review / gap analysis", date: "2026-10-18" }] },
+  { month: "2026-11", label: "Analytical framework",     q: "How exactly will I argue this?",                           cps: [{ label: "Analytical framework", date: "2026-11-24" }] },
+  { month: "2026-12", label: "Exams — rest & reflect",   q: "What needs rethinking when I return in January?" },
+  { month: "2027-01", label: "First draft",              q: "Can I write the argument all the way through?",            cps: [{ label: "Rough draft", date: "2027-01-03" }, { label: "Complete first draft", date: "2027-01-29" }] },
+  { month: "2027-02", label: "Revise",                   q: "Does every section earn its place?" },
+  { month: "2027-03", label: "Final note",               q: "Is it polished and citation-ready?",                       cps: [{ label: "Final note", date: "2027-03-05" }] }
+];
+const todayYM = () => new Date().toISOString().slice(0, 7);
+function currentStageIdx() {
+  const ym = todayYM();
+  if (ym < NOTE_STAGES[0].month) return 0;
+  let idx = NOTE_STAGES.length - 1;
+  NOTE_STAGES.forEach((s, i) => { if (s.month <= ym) idx = i; });
+  return idx;
+}
+function nextNoteCheckpoint() {
+  const today = todayStr();
+  return NOTE_STAGES.flatMap(s => s.cps || []).find(cp => cp.date >= today) || null;
+}
+
+/* =====================================================================
+   PANEL RENDERERS — read-only over each app's jsonb, ~20-50 lines each
+   ===================================================================== */
+
+// -- Law School (table: law_school_data; columns: courses, milestones, public_service_log, settings) --
+function lawDeadlineCandidates(data) {
+  const today = todayStr();
+  const items = [];
+  for (const m of (data.milestones || [])) {
+    if (!m.date || m.status === "done") continue;
+    items.push({ date: m.date, label: m.name, sub: m.tentative ? "tentative date" : null });
+    for (const t of (m.lead_tasks || [])) {
+      if (t.done) continue;
+      items.push({ date: addDays(m.date, -t.days_before), label: t.label, sub: m.name });
+    }
+  }
+  return items.filter(i => i.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+}
+function lawHeadline(data) {
+  const next = lawDeadlineCandidates(data)[0];
+  if (!next) return null;
+  const d = daysUntil(next.date);
+  return `${esc(next.label)} in ${d} day${d === 1 ? "" : "s"}`;
+}
+function renderLawDeadlines(data, body) {
+  const items = lawDeadlineCandidates(data).slice(0, 3);
+  if (!items.length) { body.innerHTML = `<p class="widget-empty">No upcoming deadlines logged.</p>`; return; }
+  body.innerHTML = `<ul class="warn-list">${items.map(i => {
+    const d = daysUntil(i.date);
+    const level = d <= 7 ? "critical" : d <= 21 ? "warning" : "good";
+    return `<li>${statusDot(level)}<div><div>${esc(i.label)}</div><div class="widget-sub">${fmtDate(i.date)} · in ${d} day${d === 1 ? "" : "s"}${i.sub ? " · " + esc(i.sub) : ""}</div></div></li>`;
+  }).join("")}</ul>`;
+}
+function renderLawReview(_data, body) {
+  const stage = NOTE_STAGES[currentStageIdx()];
+  const next = nextNoteCheckpoint();
+  const monthName = new Date(stage.month + "-15T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  body.innerHTML = `
+    <div class="stage-title">${esc(stage.label)} <span class="widget-sub">${monthName}</span></div>
+    <div class="stage-q">“${esc(stage.q)}”</div>
+    ${next ? `<div class="widget-sub" style="margin-top:6px">${daysUntil(next.date)} days until ${esc(next.label)} (${fmtDate(next.date)})</div>` : ""}
+  `;
+}
+
+// -- Dinner Planner (table: user_data; the live in-progress plan isn't synced —
+//    only saved menus are, in rules._savedMenus — so "this week" = the most
+//    recently saved type:'weekly' menu) --
+function latestWeeklyMenu(data) {
+  const menus = ((data.rules || {})._savedMenus) || [];
+  return menus.find(m => m.type === "weekly") || null;
+}
+function dinnerHeadline(data) {
+  const weekly = latestWeeklyMenu(data);
+  if (!weekly) return null;
+  const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  const todayItem = (weekly.plan || []).find(p => p.day === todayName);
+  if (!todayItem || !todayItem.r) return null;
+  return `Dinner: ${esc(todayItem.r.name)}`;
+}
+function renderDinner(data, body) {
+  const weekly = latestWeeklyMenu(data);
+  if (!weekly) { body.innerHTML = `<p class="widget-empty">No week planned yet.</p>`; return; }
+  const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  body.innerHTML = `<div class="widget-sub" style="margin-bottom:8px">${esc(weekly.name)}</div><ul class="day-strip">${(weekly.plan || []).map(p => {
+    const extras = [p.breakfast, p.lunch, p.side, p.dessert].filter(Boolean).map(x => x.name);
+    return `<li class="${p.day === todayName ? "today" : ""}"><span class="day-label">${esc((p.day || "").slice(0, 3))}</span><span class="day-meal">${p.r ? esc(p.r.name) : "—"}</span>${extras.length ? `<span class="widget-sub"> · ${esc(extras.join(", "))}</span>` : ""}</li>`;
+  }).join("")}</ul>`;
+}
+
+// -- Sewing (table: sewing_data; columns: patterns, projects, settings) --
+const SEW_ACTIVE_STATUSES = ["idea", "planning", "ready_to_cut", "in_progress"];
+const SEW_STATUS_LABEL = { idea: "Idea", planning: "Planning", ready_to_cut: "Ready to cut", in_progress: "In progress", finished: "Finished", abandoned: "Abandoned" };
+function currentSewProject(data) {
+  const projects = data.projects || [];
+  return projects.find(p => p.status === "in_progress") || projects.find(p => SEW_ACTIVE_STATUSES.includes(p.status)) || null;
+}
+function sewingHeadline(data) {
+  const p = currentSewProject(data);
+  if (!p) return null;
+  return `Sewing: ${esc(p.name)} — ${esc(SEW_STATUS_LABEL[p.status] || p.status)}`;
+}
+function renderSewing(data, body) {
+  const p = currentSewProject(data);
+  if (!p) { body.innerHTML = `<p class="widget-empty">Nothing in the queue.</p>`; return; }
+  const pat = p.pattern_id != null ? (data.patterns || []).find(x => x.id === p.pattern_id) : null;
+  const bits = [];
+  if (pat) bits.push(pat.name);
+  if (p.fabric && p.fabric.description) bits.push(p.fabric.description);
+  let dateLine = "";
+  if (p.target_date) {
+    const d = daysUntil(p.target_date);
+    dateLine = `<div class="widget-sub" style="margin-top:6px">by ${fmtDate(p.target_date)}${d >= 0 ? ` · in ${d} day${d === 1 ? "" : "s"}` : " · past due"}</div>`;
+  }
+  body.innerHTML = `
+    <div class="stage-title">${esc(p.name)}<span class="chip">${esc(SEW_STATUS_LABEL[p.status] || p.status)}</span></div>
+    ${bits.length ? `<div class="widget-sub" style="margin-top:4px">${esc(bits.join(" · "))}</div>` : ""}
+    ${p.notes ? `<div style="margin-top:6px">${esc(p.notes)}</div>` : ""}
+    ${dateLine}
+  `;
+}
+
+/* =====================================================================
+   APP REGISTRY — adding an app is a config entry + small render function,
+   never a rebuild. Apps with no `panels` render as a link card until
+   their widget logic is written (restock, perfume — for now).
+   ===================================================================== */
+const APPS = [
+  {
+    id: "law", name: "Law School", url: "/law-school-tracker/", table: "law_school_data",
+    color: "var(--law)", bg: "var(--law-bg)", icon: ICONS.law,
+    headline: lawHeadline,
+    panels: [
+      { title: "Law School Deadlines", render: renderLawDeadlines },
+      { title: "Law Review Focus", render: renderLawReview }
+    ]
+  },
+  {
+    id: "dinner", name: "Dinner Planner", url: "/dinner-planner/", table: "user_data",
+    color: "var(--dinner)", bg: "var(--dinner-bg)", icon: ICONS.dinner,
+    headline: dinnerHeadline,
+    panels: [ { title: "This Week's Menu", render: renderDinner } ]
+  },
+  {
+    id: "sewing", name: "Sewing", url: "/sewing-tracker/", table: "sewing_data",
+    color: "var(--sewing)", bg: "var(--sewing-bg)", icon: ICONS.sewing,
+    headline: sewingHeadline,
+    panels: [ { title: "Sewing Bench", render: renderSewing } ]
+  },
+  {
+    id: "restock", name: "Restock", url: "/restock/", table: "restock_data",
+    color: "var(--restock)", bg: "var(--restock-bg)", icon: ICONS.restock
+  },
+  {
+    id: "perfume", name: "Perfume", url: "/perfume-tracker/", table: "perfume_data",
+    color: "var(--perfume)", bg: "var(--perfume-bg)", icon: ICONS.perfume
+  }
+];
+
+/* =====================================================================
+   FETCH + RENDER
+   ===================================================================== */
+let appData = {};
+
+async function loadAllAppData(user) {
+  const results = await Promise.allSettled(
+    APPS.map(app => sb.from(app.table).select("*").eq("user_id", user.id).maybeSingle())
+  );
+  results.forEach((r, i) => {
+    const app = APPS[i];
+    appData[app.id] = (r.status === "fulfilled" && !r.value.error && r.value.data) ? r.value.data : null;
+  });
+  renderHeadline();
+  renderWidgets();
+}
+
+function renderAppSwitcher() {
+  $("#app-switcher").innerHTML = APPS.map(app => `
+    <a class="switcher-item" href="${app.url}" style="--app-color:${app.color};--app-bg:${app.bg}">
+      <span class="switcher-icon">${app.icon}</span>
+      <span class="switcher-label">${esc(app.name)}</span>
+    </a>`).join("");
+}
+
+function renderHeadline() {
+  const bits = APPS
+    .filter(app => app.headline && appData[app.id])
+    .map(app => { try { return app.headline(appData[app.id]); } catch (e) { console.error("headline error", app.id, e); return null; } })
+    .filter(Boolean);
+  $("#headline-banner").innerHTML = bits.length
+    ? `${ICONS.home} ${bits.join(" &nbsp;·&nbsp; ")}`
+    : `${ICONS.home} ${guestMode || !currentUser ? "Sign in to see what's due today." : "Nothing urgent to flag right now."}`;
+}
+
+function widgetCard(app, title, fillBody, linkOnly) {
+  const a = document.createElement("a");
+  a.className = "card widget" + (linkOnly ? " link-card" : "");
+  a.href = app.url;
+  a.style.setProperty("--app-color", app.color);
+  a.innerHTML = `<div class="widget-head"><span class="widget-icon">${app.icon}</span><h2>${esc(title)}</h2><span class="widget-open">${ICONS.chevronRight}</span></div><div class="widget-body"></div>`;
+  const body = a.querySelector(".widget-body");
+  try { fillBody(body); }
+  catch (e) { console.error("widget render error", app.id, title, e); body.innerHTML = `<p class="widget-empty">Couldn't load this widget.</p>`; }
+  return a;
+}
+
+function renderWidgets() {
+  const grid = $("#widget-grid");
+  grid.innerHTML = "";
+  APPS.forEach(app => {
+    const data = appData[app.id];
+    if (app.panels && app.panels.length && data) {
+      app.panels.forEach(panel => grid.appendChild(widgetCard(app, panel.title, body => panel.render(data, body))));
+    } else {
+      grid.appendChild(widgetCard(app, app.name, body => {
+        body.innerHTML = `<p class="widget-empty">${!currentUser ? "Sign in to see live status." : "Open " + esc(app.name) + " →"}</p>`;
+      }, true));
+    }
+  });
+}
+
+/* =====================================================================
+   AUTH — same email/password + guest-mode pattern as every sibling app
+   ===================================================================== */
+let _authMode = "signin";
+function toggleAuthMode() {
+  _authMode = _authMode === "signin" ? "signup" : "signin";
+  $("#auth-btn").textContent = _authMode === "signin" ? "Sign In" : "Sign Up";
+  $("#auth-subtitle").textContent = _authMode === "signin" ? "Sign in — same account as your other apps" : "Create your account";
+  $("#auth-toggle-text").textContent = _authMode === "signin" ? "Don't have an account?" : "Already have an account?";
+  $("#auth-toggle-link").textContent = _authMode === "signin" ? " Sign up" : " Sign in";
+  $("#auth-err").textContent = ""; $("#auth-err").className = "auth-err";
+}
+async function authSubmit() {
+  const email = $("#auth-email").value.trim();
+  const pass = $("#auth-password").value;
+  const errEl = $("#auth-err");
+  errEl.textContent = ""; errEl.className = "auth-err";
+  if (!email || !pass) { errEl.textContent = "Please enter your email and password."; return; }
+  if ($("#auth-remember").checked) localStorage.setItem("hub-remembered-email", email);
+  else localStorage.removeItem("hub-remembered-email");
+  const { data: res, error } = _authMode === "signin"
+    ? await sb.auth.signInWithPassword({ email, password: pass })
+    : await sb.auth.signUp({ email, password: pass });
+  if (error) { errEl.textContent = error.message; return; }
+  if (_authMode === "signup" && !res.session) { errEl.textContent = "Check your email to confirm your account."; errEl.className = "auth-err ok"; return; }
+  if (res.session) await handleAuthSession(res.session);
+}
+async function handleAuthSession(session) {
+  if (!session || (currentUser && currentUser.id === session.user.id)) return;
+  currentUser = session.user;
+  guestMode = false;
+  $("#auth-overlay").classList.add("hidden");
+  $("#user-info").style.display = "block";
+  $("#user-email").textContent = currentUser.email;
+  await loadAllAppData(currentUser);
+}
+function authGuest() {
+  guestMode = true;
+  $("#auth-overlay").classList.add("hidden");
+  $("#user-info").style.display = "block";
+  $("#user-email").textContent = "guest";
+  renderHeadline();
+  renderWidgets();
+}
+async function doSignOut() {
+  if (guestMode) { location.reload(); return; }
+  await sb.auth.signOut();
+  location.reload();
+}
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) await handleAuthSession(session);
+  if (!session && !guestMode) {
+    currentUser = null;
+    $("#auth-overlay").classList.remove("hidden");
+    $("#user-info").style.display = "none";
+  }
+});
+
+/* ---- init ---- */
+renderAppSwitcher();
+renderHeadline();
+renderWidgets();
+const rememberedEmail = localStorage.getItem("hub-remembered-email");
+if (rememberedEmail) { $("#auth-email").value = rememberedEmail; $("#auth-remember").checked = true; }
+</script>
+</body>
+</html>
