@@ -29,6 +29,12 @@
   --sewing: #3b5e8c;   --sewing-bg: #e7eef6;
   --restock: #2e7d5b;  --restock-bg: #e4f2ea;
   --perfume: #463a32;  --perfume-bg: #ece7e2;
+  /* Agenda and Time Tracker both ship the shared warm theme, so "match the app's
+     own --accent" would give them the same terracotta as each other and nearly
+     the same as Dinner. These colours exist to tell apps apart at a glance, so
+     these two get distinct hues instead. */
+  --agenda: #7a4f9c;   --agenda-bg: #efe7f6;
+  --time: #b07d18;     --time-bg: #f6eedb;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -49,6 +55,8 @@
     --sewing: #6f9ac9;   --sewing-bg: #1e2a38;
     --restock: #4bbf8c;  --restock-bg: #16302a;
     --perfume: #9c8579;  --perfume-bg: #2e2822;
+    --agenda: #b189d6;   --agenda-bg: #2a2136;
+    --time: #e0aa46;     --time-bg: #33290f;
   }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -222,6 +230,10 @@ const ICONS = {
   dinner: svgIcon('<path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'),
   sewing: svgIcon('<path d="M17.5 6.5 3 21"/><circle cx="19" cy="5" r="2.1"/>'),
   restock: svgIcon('<path d="M4 10h16l-1.3 8.8a2 2 0 0 1-2 1.7H7.3a2 2 0 0 1-2-1.7Z"/><path d="M8 10a4 4 0 0 1 8 0"/><path d="M9 14v3"/><path d="M15 14v3"/>'),
+  // Both lifted from the apps' own header glyphs, so the hub card and the app
+  // itself wear the same mark.
+  agenda: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'),
+  time: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>'),
   perfume: svgIcon('<rect x="6.8" y="12.2" width="8.6" height="9.6" rx="2.2"/><path d="M9.6 12.2v-1.7a1 1 0 0 1 1-1h1.6a1 1 0 0 1 1 1v1.7"/><path d="M9 10.5h4.2"/><path d="M12.7 9.5c.5-1.4 1.5-2.6 2.8-3.2"/><circle cx="16.4" cy="5.7" r="2.7"/><path d="M9.2 16.6h4.8"/>'),
   chevronRight: svgIcon('<polyline points="9 18 15 12 9 6"/>'),
   home: svgIcon('<rect x="3" y="10" width="18" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>')
@@ -356,42 +368,138 @@ function renderSewing(data, body) {
   `;
 }
 
+/* -- Agenda (table: agenda_data; columns: tasks, templates, completions, settings) --
+   Deliberately reports only *dated* tasks. An accurate "everything due today"
+   would have to expand recurring routines, and that recurrence logic already
+   exists in three places (the app, morning-brief, widget-brief) — a fourth copy
+   here would drift the way any duplicated rule does. So the panel counts what it
+   can read directly and says plainly that routines aren't included, rather than
+   showing a number that quietly disagrees with the app. */
+function agendaTodayTasks(data) {
+  const today = todayStr();
+  return (data.tasks || []).filter(t => t && t.date === today && !t.done);
+}
+function agendaHeadline(data) {
+  const undone = agendaTodayTasks(data);
+  if (!undone.length) return null;
+  const next = undone.filter(t => t.time).sort((a, b) => a.time.localeCompare(b.time))[0];
+  return next ? `Agenda: ${esc(next.title)} at ${fmtHHMM(next.time)}` : `${undone.length} task${undone.length === 1 ? "" : "s"} left today`;
+}
+function fmtHHMM(hhmm) {
+  const [h, m] = String(hhmm).split(":").map(Number);
+  const ampm = h >= 12 ? "pm" : "am";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${String(m).padStart(2, "0")}${ampm}` : `${h12}${ampm}`;
+}
+function renderAgenda(data, body) {
+  const undone = agendaTodayTasks(data).sort((a, b) => (a.time || "99").localeCompare(b.time || "99"));
+  if (!undone.length) {
+    body.innerHTML = `<p class="widget-empty">Nothing dated for today.</p>`;
+    return;
+  }
+  body.innerHTML = undone.slice(0, 4).map(t =>
+    `<div class="stage-title" style="font-weight:400">${t.time ? `<span class="chip">${fmtHHMM(t.time)}</span> ` : ""}${esc(t.title)}</div>`).join("")
+    + (undone.length > 4 ? `<div class="widget-sub" style="margin-top:6px">+ ${undone.length - 4} more</div>` : "")
+    + `<div class="widget-sub" style="margin-top:6px">Dated tasks only — recurring routines live in the app.</div>`;
+}
+
+/* -- Time Tracker (table: time_data; columns: categories, entries, goals, timer, settings) --
+   entryMinutes mirrors the app's own fallback (use `minutes`, else end - start).
+   That's arithmetic on two stored fields rather than a rule that can drift. */
+function ttEntryMinutes(e) {
+  if (typeof e.minutes === "number") return e.minutes;
+  const toMin = s => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "")); return m ? +m[1] * 60 + +m[2] : null; };
+  const s = toMin(e.start), en = toMin(e.end);
+  return (s != null && en != null) ? Math.max(0, en - s) : 0;
+}
+function fmtDur(min) {
+  const m = Math.max(0, Math.round(min || 0));
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h && r) return `${h}h ${r}m`;
+  return h ? `${h}h` : `${r}m`;
+}
+function ttToday(data) {
+  const today = todayStr();
+  return (data.entries || []).filter(e => e && e.date === today);
+}
+function timeHeadline(data) {
+  const mins = ttToday(data).reduce((n, e) => n + ttEntryMinutes(e), 0);
+  return mins > 0 ? `${fmtDur(mins)} tracked` : null;
+}
+function renderTime(data, body) {
+  const entries = ttToday(data);
+  if (!entries.length) {
+    body.innerHTML = `<p class="widget-empty">Nothing tracked yet today.</p>`;
+    return;
+  }
+  const cats = data.categories || [];
+  const byCat = {};
+  entries.forEach(e => {
+    const name = (cats.find(c => c.id === e.category_id) || {}).name || "Uncategorised";
+    byCat[name] = (byCat[name] || 0) + ttEntryMinutes(e);
+  });
+  const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const total = rows.reduce((n, r) => n + r[1], 0);
+  body.innerHTML = `<div class="stage-title">${fmtDur(total)}<span class="chip">today</span></div>`
+    + rows.slice(0, 4).map(([name, mins]) =>
+        `<div class="widget-sub" style="margin-top:4px">${esc(name)} · ${fmtDur(mins)}</div>`).join("");
+}
+
 /* =====================================================================
    APP REGISTRY — adding an app is a config entry + small render function,
    never a rebuild. Apps with no `panels` render as a link card until
    their widget logic is written (restock, perfume — for now).
    ===================================================================== */
-const APPS = [
-  {
-    id: "law", name: "Law School", url: "/law-school-tracker/", table: "law_school_data",
-    color: "var(--law)", bg: "var(--law-bg)", icon: ICONS.law,
-    headline: lawHeadline,
-    panels: [
-      { title: "Law School Deadlines", render: renderLawDeadlines },
-      { title: "Law Review Focus", render: renderLawReview }
-    ]
-  },
-  {
-    id: "dinner", name: "Dinner Planner", url: "/dinner-planner/", table: "user_data",
-    color: "var(--dinner)", bg: "var(--dinner-bg)", icon: ICONS.dinner,
-    headline: dinnerHeadline,
-    panels: [ { title: "This Week's Menu", render: renderDinner } ]
-  },
-  {
-    id: "sewing", name: "Sewing", url: "/sewing-tracker/", table: "sewing_data",
-    color: "var(--sewing)", bg: "var(--sewing-bg)", icon: ICONS.sewing,
-    headline: sewingHeadline,
-    panels: [ { title: "Sewing Bench", render: renderSewing } ]
-  },
-  {
-    id: "restock", name: "Restock", url: "/restock/", table: "restock_data",
-    color: "var(--restock)", bg: "var(--restock-bg)", icon: ICONS.restock
-  },
-  {
-    id: "perfume", name: "Perfume", url: "/perfume-tracker/", table: "perfume_data",
-    color: "var(--perfume)", bg: "var(--perfume-bg)", icon: ICONS.perfume
-  }
+// Behaviour keyed by id — headline contributions and widget panels. Identity
+// (name, url, table, colours, icon key) comes from apps.json instead, so adding
+// an app is one edit there rather than one per consumer. An app with no entry
+// here still gets a link card, which is the documented "registry entry now,
+// panel later" path.
+const APP_BEHAVIOUR = {
+  agenda:  { headline: agendaHeadline, panels: [{ title: "Today", render: renderAgenda }] },
+  law:     { headline: lawHeadline, panels: [
+               { title: "Law School Deadlines", render: renderLawDeadlines },
+               { title: "Law Review Focus", render: renderLawReview }
+             ] },
+  dinner:  { headline: dinnerHeadline, panels: [{ title: "This Week's Menu", render: renderDinner }] },
+  sewing:  { headline: sewingHeadline, panels: [{ title: "Sewing Bench", render: renderSewing }] },
+  time:    { headline: timeHeadline, panels: [{ title: "Time Tracker", render: renderTime }] }
+};
+
+// Kept in step with apps.json by hand, and used only when the fetch fails —
+// better a slightly stale hub than an empty one (file://, offline, a bad deploy).
+const APPS_FALLBACK = [
+  { id: "agenda",  name: "Agenda",          url: "https://brieespo.github.io/agenda/",             table: "agenda_data",     icon: "agenda",  color: "var(--agenda)",  bg: "var(--agenda-bg)" },
+  { id: "dinner",  name: "Dinner Planner",  url: "https://brieespo.github.io/dinner-planner/",     table: "user_data",       icon: "dinner",  color: "var(--dinner)",  bg: "var(--dinner-bg)" },
+  { id: "law",     name: "Law School",      url: "https://brieespo.github.io/law-school-tracker/", table: "law_school_data", icon: "law",     color: "var(--law)",     bg: "var(--law-bg)" },
+  { id: "restock", name: "Restock",         url: "https://brieespo.github.io/restock/",            table: "restock_data",    icon: "restock", color: "var(--restock)", bg: "var(--restock-bg)" },
+  { id: "perfume", name: "Perfume Tracker", url: "https://brieespo.github.io/perfume-tracker/",    table: "perfume_data",    icon: "perfume", color: "var(--perfume)", bg: "var(--perfume-bg)" },
+  { id: "sewing",  name: "Sewing Tracker",  url: "https://brieespo.github.io/sewing-tracker/",     table: "sewing_data",     icon: "sewing",  color: "var(--sewing)",  bg: "var(--sewing-bg)" },
+  { id: "time",    name: "Time Tracker",    url: "https://brieespo.github.io/time-tracker/",       table: "time_data",       icon: "time",    color: "var(--time)",    bg: "var(--time-bg)" }
 ];
+
+let APPS = [];
+function buildRegistry(list) {
+  return list
+    .filter(a => a && a.id && a.name && a.url && a.table)
+    .map(a => Object.assign({}, a, { icon: ICONS[a.icon] || "" }, APP_BEHAVIOUR[a.id] || {}));
+}
+async function loadRegistry() {
+  let list = APPS_FALLBACK;
+  try {
+    const res = await fetch("./apps.json", { cache: "no-cache" });
+    if (res.ok) {
+      const j = await res.json();
+      if (Array.isArray(j.apps) && j.apps.length) list = j.apps;
+    }
+  } catch (e) {
+    console.error("apps.json unavailable — using the built-in list", e);
+  }
+  APPS = buildRegistry(list);
+}
+// Everything that reads APPS waits on this rather than racing it: auth can
+// resolve before the fetch does.
+const registryReady = loadRegistry();
 
 /* =====================================================================
    FETCH + RENDER
@@ -399,6 +507,7 @@ const APPS = [
 let appData = {};
 
 async function loadAllAppData(user) {
+  await registryReady;   // auth can resolve before apps.json does
   const results = await Promise.allSettled(
     APPS.map(app => sb.from(app.table).select("*").eq("user_id", user.id).maybeSingle())
   );
@@ -514,9 +623,13 @@ sb.auth.onAuthStateChange(async (event, session) => {
 });
 
 /* ---- init ---- */
-renderAppSwitcher();
-renderHeadline();
-renderWidgets();
+// First paint waits for the registry; a guest sign-in that lands earlier will
+// have rendered an empty grid, so re-render once the list is in.
+registryReady.then(() => {
+  renderAppSwitcher();
+  renderHeadline();
+  renderWidgets();
+});
 const rememberedEmail = localStorage.getItem("hub-remembered-email");
 if (rememberedEmail) { $("#auth-email").value = rememberedEmail; $("#auth-remember").checked = true; }
 </script>

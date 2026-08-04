@@ -17,6 +17,8 @@ Planning document for Bri's hub site: the dashboard that sits above her suite of
 
 ## The app registry (extensibility — Bri's requirement)
 
+**Identity now lives in `apps.json`** at the hub root — the single source of truth for the suite's app list, so adding an app is one edit there rather than one per app that lists it. It holds identity only (id, name, url, table, colour vars, icon key); behaviour (headline/panel renderers) and the icon SVG stay in each consumer's JS keyed by id, since neither survives JSON. Sibling apps read it too (the agenda's apps menu) — same origin, so a plain fetch with no CORS or auth, working in guest mode. Every consumer keeps a hand-synced `*_FALLBACK` copy used only when the fetch fails: offline, a bad deploy, or `file://` should leave a stale list, never an empty one.
+
 Adding a future app to the hub must be a config entry + one small function, never a rebuild. Structure the hub around an `APPS` registry:
 
 ```js

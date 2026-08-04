@@ -1,0 +1,68 @@
+{
+  "_comment": "Single source of truth for the suite's app list. The hub renders from it, and sibling apps (e.g. the agenda's apps menu) fetch it so the list lives in one place instead of being hard-coded in each. Identity fields only — behaviour (headline/panel renderers) and icon SVG stay in each consumer's own JS, keyed by id. URLs are absolute so a consumer served from anywhere resolves them correctly. Every consumer keeps a built-in fallback copy, so a failed fetch degrades to a stale list rather than an empty menu.",
+  "apps": [
+    {
+      "id": "agenda",
+      "name": "Agenda",
+      "url": "https://brieespo.github.io/agenda/",
+      "table": "agenda_data",
+      "icon": "agenda",
+      "color": "var(--agenda)",
+      "bg": "var(--agenda-bg)"
+    },
+    {
+      "id": "dinner",
+      "name": "Dinner Planner",
+      "url": "https://brieespo.github.io/dinner-planner/",
+      "table": "user_data",
+      "icon": "dinner",
+      "color": "var(--dinner)",
+      "bg": "var(--dinner-bg)"
+    },
+    {
+      "id": "law",
+      "name": "Law School",
+      "url": "https://brieespo.github.io/law-school-tracker/",
+      "table": "law_school_data",
+      "icon": "law",
+      "color": "var(--law)",
+      "bg": "var(--law-bg)"
+    },
+    {
+      "id": "restock",
+      "name": "Restock",
+      "url": "https://brieespo.github.io/restock/",
+      "table": "restock_data",
+      "icon": "restock",
+      "color": "var(--restock)",
+      "bg": "var(--restock-bg)"
+    },
+    {
+      "id": "perfume",
+      "name": "Perfume Tracker",
+      "url": "https://brieespo.github.io/perfume-tracker/",
+      "table": "perfume_data",
+      "icon": "perfume",
+      "color": "var(--perfume)",
+      "bg": "var(--perfume-bg)"
+    },
+    {
+      "id": "sewing",
+      "name": "Sewing Tracker",
+      "url": "https://brieespo.github.io/sewing-tracker/",
+      "table": "sewing_data",
+      "icon": "sewing",
+      "color": "var(--sewing)",
+      "bg": "var(--sewing-bg)"
+    },
+    {
+      "id": "time",
+      "name": "Time Tracker",
+      "url": "https://brieespo.github.io/time-tracker/",
+      "table": "time_data",
+      "icon": "time",
+      "color": "var(--time)",
+      "bg": "var(--time-bg)"
+    }
+  ]
+}
